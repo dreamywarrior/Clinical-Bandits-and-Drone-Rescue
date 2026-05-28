@@ -84,6 +84,14 @@ Each run creates a timestamped directory under `logs/` containing:
 - `simulation.log`: Step-by-step text logs.
 - `simulation.mp4`: Rendered video output when rendering is enabled.
 
+## Rendering Preview
+
+![Drone rescue environment rendering](assets/simulation_preview.png)
+
+The screenshot above is captured from the generated simulation video. It shows
+the 5x5 rescue grid, current drone position, mission status, legend, and active
+rescue targets.
+
 ## Sequence Diagram
 
 ```mermaid
