@@ -21,6 +21,15 @@ from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
 import numpy as np
 
+# Try importing planning algorithms.
+# Fallback safely if file/class is unavailable.
+try:
+    from .planning_algorithms import ValueIterationPlanner
+except ImportError:
+    try:
+        from planning_algorithms import ValueIterationPlanner
+    except ImportError:
+        ValueIterationPlanner = None
 
 class DroneRescueEnv(Env):
     """Gymnasium environment for a drone rescue mission on a fixed grid.
@@ -111,9 +120,54 @@ class DroneRescueEnv(Env):
         self.log_dir = log_dir
         self.renderer = None
         self.action_taken = None
+        self.value_function = None
+        self.policy = {}
+        self.using_algorithm_policy = False
+        self._update_policy_and_values()
 
         if self.render_mode is not None:
             self.renderer = self._create_renderer()
+
+    def _update_policy_and_values(self):
+        """Update policy/value using algorithm or fallback logic."""
+        
+        # Fallback heuristic visualization.
+        fallback_values = self._estimate_value_function()
+        fallback_policy = self._estimate_direction_policy()
+
+        self.using_algorithm_policy = False
+
+        # If planning algorithm file not available.
+        if ValueIterationPlanner is None:
+            self.value_function = fallback_values
+            self.policy = fallback_policy
+            return
+
+        try:
+            # Run planning algorithm.
+            planner = ValueIterationPlanner(self)
+
+            planned_values, planned_policy = (
+                planner.run_value_iteration()
+            )
+
+            # Fallback if values unavailable.
+            if planned_values is None:
+                planned_values = fallback_values
+
+            # Fallback if policy empty.
+            if not planned_policy:
+                planned_policy = fallback_policy
+
+            self.value_function = planned_values
+            self.policy = planned_policy
+
+            self.using_algorithm_policy = True
+
+        except Exception:
+            # Any algorithm failure falls back safely.
+            self.value_function = fallback_values
+            self.policy = fallback_policy
 
     def step(self, action):
         """Apply one action and return the standard Gymnasium step output.
@@ -141,8 +195,8 @@ class DroneRescueEnv(Env):
         # Wind zones introduce stochasticity by occasionally replacing the
         # intended action with a random cardinal move.
         if self.grid[x, y] == self.WIND_ZONE:
-            if np.random.rand() < self.WIND_PROBABILITY:
-                action = int(np.random.choice([0, 1, 2, 3]))
+            if self.np_random.random() < self.WIND_PROBABILITY:
+                action = int(self.np_random.choice([0, 1, 2, 3]))
                 self.action_taken = f"{self.ACTION_NAMES.get(action)} (Wind)"
 
         next_x, next_y = self._get_candidate_position(action)
@@ -165,6 +219,7 @@ class DroneRescueEnv(Env):
         self.step_count += 1
         self.last_reward = self.calculate_reward()
         self.cumulative_reward += self.last_reward
+        self._update_policy_and_values()
         done = self.check_done()
         return self._get_obs(), self.last_reward, (done == 1), (done == 2), self._get_info()
 
@@ -191,7 +246,131 @@ class DroneRescueEnv(Env):
         self.cumulative_reward = 0.0
         self.last_reward = 0.0
         self.action_taken = None
+        self._update_policy_and_values()
         return self._get_obs(), self._get_info()
+
+    def _estimate_value_function(self):
+        """Estimate a visual value function for each grid cell.
+
+        The project does not yet contain a trained dynamic-programming or RL
+        value table, so this method builds a deterministic, interpretable
+        approximation for visualization. Cells closer to active rescue targets
+        receive higher values. Danger zones and blocked cells receive lower
+        values, while charging stations receive a small boost.
+
+        Returns:
+            np.ndarray: Grid-shaped float array used by the heatmap overlay.
+        """
+        value_function = np.zeros(self.grid.shape, dtype=np.float32)
+        active_targets = [
+            target
+            for target, active in self.rescue_target_state.items()
+            if active
+        ]
+
+        for row in range(self.grid.shape[0]):
+            for col in range(self.grid.shape[1]):
+                cell_type = self.grid[row, col]
+
+                if cell_type == self.BLOCKED_CELL:
+                    value_function[row, col] = -1.0
+                    continue
+
+                if not active_targets:
+                    value_function[row, col] = 1.0
+                    continue
+
+                nearest_distance = min(
+                    abs(row - target_row) + abs(col - target_col)
+                    for target_row, target_col in active_targets
+                )
+                max_distance = sum(self.grid.shape) - 2
+                normalized_value = 1.0 - (nearest_distance / max_distance)
+
+                if cell_type == self.DANGER_ZONE:
+                    normalized_value -= 0.35
+                elif cell_type == self.CHARGING_STATION:
+                    normalized_value += 0.2
+                elif cell_type == self.RESCUE_TARGET:
+                    normalized_value = 1.0
+
+                value_function[row, col] = np.clip(normalized_value, 0.0, 1.0)
+
+        return value_function
+
+    def _estimate_direction_policy(self):
+        """Estimate a greedy direction policy toward active rescue targets.
+
+        This policy is intended for visualization only. A future algorithm can
+        replace it with a learned or dynamic-programming policy while keeping
+        the renderer interface unchanged.
+
+        Returns:
+            dict[tuple[int, int], int]: Mapping from grid position to action id.
+        """
+        policy = {}
+        active_targets = [
+            target
+            for target, active in self.rescue_target_state.items()
+            if active
+        ]
+
+        if not active_targets:
+            return policy
+
+        for row in range(self.grid.shape[0]):
+            for col in range(self.grid.shape[1]):
+                if self.grid[row, col] == self.BLOCKED_CELL:
+                    continue
+
+                if (row, col) in active_targets:
+                    policy[(row, col)] = 4
+                    continue
+
+                policy[(row, col)] = self._best_action_toward_target(
+                    row,
+                    col,
+                    active_targets,
+                )
+
+        return policy
+
+    def _best_action_toward_target(self, row, col, active_targets):
+        """Return the greedy valid action that moves closest to a target.
+
+        Args:
+            row (int): Candidate row.
+            col (int): Candidate column.
+            active_targets (list[tuple[int, int]]): Remaining rescue targets.
+
+        Returns:
+            int: Action id for the best one-step move.
+        """
+        action_candidates = {
+            0: (max(row - 1, 0), col),
+            1: (min(row + 1, self.grid.shape[0] - 1), col),
+            2: (row, max(col - 1, 0)),
+            3: (row, min(col + 1, self.grid.shape[1] - 1)),
+            4: (row, col),
+        }
+
+        best_action = 4
+        best_distance = float("inf")
+
+        for action, (next_row, next_col) in action_candidates.items():
+            if self.grid[next_row, next_col] == self.BLOCKED_CELL:
+                continue
+
+            nearest_distance = min(
+                abs(next_row - target_row) + abs(next_col - target_col)
+                for target_row, target_col in active_targets
+            )
+
+            if nearest_distance < best_distance:
+                best_action = action
+                best_distance = nearest_distance
+
+        return best_action
 
     def _validate_action(self, action):
         """Validate and normalize an action before applying it.
@@ -335,6 +514,8 @@ class DroneRescueEnv(Env):
                 cumulative_reward=self.cumulative_reward,
                 rescue_target_state=self.rescue_target_state,
                 action_taken=self.action_taken,
+                value_function=self.value_function,
+                policy=self.policy,
             )
         except RuntimeError as error:
             raise RuntimeError(f"Failed to render environment: {error}") from error
@@ -383,6 +564,9 @@ class DroneRescueEnv(Env):
             "battery_level": self.battery_level,
             "rescue_target_state": self.rescue_target_state,
             "action_taken": self.action_taken,
+            "value_function": self.value_function,
+            "policy": self.policy,
+            "using_algorithm_policy": self.using_algorithm_policy,
         }
 
     def close(self):

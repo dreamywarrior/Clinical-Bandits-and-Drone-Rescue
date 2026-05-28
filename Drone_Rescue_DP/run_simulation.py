@@ -20,6 +20,15 @@ try:
 except ImportError:
     from environment import DroneRescueEnv
 
+# Planning algorithm import.
+try:
+    from .planning_algorithms import ValueIterationPlanner
+except ImportError:
+    try:
+        from planning_algorithms import ValueIterationPlanner
+    except ImportError:
+        ValueIterationPlanner = None
+
 CUSTOM_ACTION_MODE = "custom"
 ALGORITHM_ACTION_MODE = "algorithm"
 RANDOM_ACTION_MODE = "random"
@@ -131,12 +140,44 @@ def generate_algorithm_actions(env):
         list[int]: A sequence of action integers for the agent to execute.
     """
     actions = []
-    # =====================================================
-    # TODO:
-    # Add algorithm-generated action logic here
-    # =====================================================
-    return actions
+    # Fallback if planner unavailable.
+    if ValueIterationPlanner is None:
+        return actions
+    try:
+        planner = ValueIterationPlanner(env)
+        _, policy = planner.run_value_iteration()
 
+        # Return empty actions if policy unavailable.
+        if not policy:
+            return actions
+        current_state = env.state
+
+        # Build action sequence using policy.
+        for _ in range(env.MAX_STEPS):
+            if current_state not in policy:
+                break
+            action = policy[current_state]
+            actions.append(action)
+
+            # Simulate next state transition locally.
+            row, col = current_state
+            moves = {
+                0: (max(row - 1, 0), col),
+                1: (min(row + 1, env.grid.shape[0] - 1), col,),
+                2: (row, max(col - 1, 0)),
+                3: (row, min(col + 1, env.grid.shape[1] - 1),),
+                4: (row, col),
+            }
+            next_state = moves[action]
+
+            # Prevent blocked-cell transitions.
+            if (env.grid[next_state[0], next_state[1]] == env.BLOCKED_CELL):
+                break
+            current_state = next_state
+        return actions
+    
+    except Exception:
+        return []
 
 def get_action_sequence(env, mode):
     """Return the chosen sequence of actions based on the selected mode.
@@ -164,7 +205,12 @@ def get_action_sequence(env, mode):
         return list(CUSTOM_ACTIONS)
 
     if mode == ALGORITHM_ACTION_MODE:
-        return generate_algorithm_actions(env)
+        actions = generate_algorithm_actions(env)
+        # Fallback to random actions if
+        # algorithm produces no actions.
+        if not actions:
+            return [env.action_space.sample() for _ in range(env.MAX_STEPS)]
+        return actions
 
     return [env.action_space.sample() for _ in range(env.MAX_STEPS * 3)]
 
@@ -200,13 +246,16 @@ def log_step(logger, info, reward, total_reward):
     Returns:
         None
     """
+
+    policy_type = ("Algorithm" if info.get("using_algorithm_policy", False) else "Fallback")
     logger.info(
-        "Step: %s | Position: %s | Battery: %s | Reward: %s | Action: %s | Total Reward: %s",
+        "Step: %s | Position: %s | Battery: %s | Reward: %s | Action: %s | Policy: %s | Total Reward: %s",
         info["step_count"],
         info["state"],
         info["battery_level"],
         reward,
         info["action_taken"],
+        policy_type,
         total_reward,
     )
 
@@ -299,6 +348,7 @@ def simulation_loop(env, logger, action_mode):
     """
     total_reward = 0.0
     actions = get_action_sequence(env, action_mode)
+    logger.info("Action Mode Selected: %s", action_mode,)
 
     if not actions:
         logger.warning("No actions available to execute.")
