@@ -62,49 +62,23 @@ python3 "TEAM_181 - DP.py" --simulate algorithm --headless  # log only, no GUI
 ## File Structure
 
 ```
-team-181/
+Drone_Rescue_DP/
 ├── TEAM_181 - DP.py              ← Main file (run this)
-├── gymnasium_env.py              ← Gymnasium DroneRescueEnv (separated)
+├── gymnasium_env.py              ← Gymnasium environment (for --simulate)
 ├── requirements.txt              ← Dependencies
 ├── README.md                     ← This file
 ├── convergence_plot.png          ← Generated: VI vs PI convergence
 ├── task5_state_value_heatmaps.png ← Generated: V*(s) heatmaps
-└── optimal_path.png              ← Generated: drone traversal path
+├── optimal_path.png              ← Generated: drone traversal path
+└── logs/                         ← Generated with --simulate
+    └── <timestamp>/
+        ├── simulation.log        ← Step-by-step text log
+        └── simulation.mp4       ← Recorded video of the simulation
 ```
 
-### Main File Sections (`TEAM_181 - DP.py`)
+### `gymnasium_env.py`
 
-| Section | Contents                                       |
-|---------|-------------------------------------------------|
-| 1       | Imports, VM Info, Shared Constants               |
-| 2       | MDP Model — state enumeration & transitions      |
-| 3       | Value Iteration                                  |
-| 4       | Policy Iteration                                 |
-| 5       | Policy Visualisation & Simulation (text-based)   |
-| 6       | Convergence Plotting (dual-panel PNG)            |
-| 7       | Comparative Analysis (VI vs PI)                  |
-| 8       | State-Value Heatmap Analysis (Expected Outcome 4)|
-| 9       | DP Scalability Discussion (Expected Outcome 5)   |
-| 10      | Simulation Infrastructure (logging, action modes)|
-| 11      | Simulation Runner Entry Point                    |
-| 12      | Main Execution Block                             |
-
-### Gymnasium Environment (`gymnasium_env.py`)
-
-Separated from the main file to keep concerns clean. Contains the
-`DroneRescueEnv` class — a Gymnasium-compatible environment with
-`reset()`, `step()`, and `render()`. Required only for interactive
-simulation (via `Drone_Rescue_DP/run_simulation.py`), **not** for
-the DP analysis.
-
-### External Support Files (in `Drone_Rescue_DP/`)
-
-| File               | Purpose                                        |
-|--------------------|------------------------------------------------|
-| `renderer.py`      | Pygame-based grid visualisation (arrows, heatmap, drone path, video export) |
-| `run_simulation.py`| Interactive simulation runner with logging      |
-
-These are optional — the main DP file runs fully standalone.
+Contains the `DroneRescueEnv` class — a Gymnasium-compatible environment with `reset()`, `step()`, and `render()` methods. Only used when running with `--simulate`. Not needed for the DP analysis.
 
 ### Simulation Output (`logs/`)
 
