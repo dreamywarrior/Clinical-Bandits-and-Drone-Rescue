@@ -1,0 +1,8 @@
+# Core (required for DP analysis)
+numpy
+matplotlib
+
+# Optional (only needed for --simulate mode)
+# gymnasium
+# pygame
+# imageio
