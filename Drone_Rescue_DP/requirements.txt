@@ -3,6 +3,6 @@ numpy
 matplotlib
 
 # Optional (only needed for --simulate mode)
-# gymnasium
-# pygame
-# imageio
+gymnasium
+pygame
+imageio
