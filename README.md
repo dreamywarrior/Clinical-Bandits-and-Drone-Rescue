@@ -8,36 +8,34 @@
 
 ## How to Run
 
-### DP Analysis Only
+```bash
+cd Drone_Rescue_DP
+pip install -r requirements.txt
+```
+
+### DP Analysis + Plots only (no video)
 
 ```bash
-cd team-181
-pip install -r requirements.txt
 python3 "TEAM_181 - DP.py"
 ```
 
-Only **numpy** and **matplotlib** are needed (listed in `requirements.txt`).
+This runs Value Iteration, Policy Iteration, comparative analysis, and saves 3 PNG plots. No video or GUI window.
 
-### DP + Live Simulation (Pygame rendering, logging, video export)
+### DP Analysis + Live Video Simulation
 
 ```bash
-# Install extra dependencies
-pip install gymnasium pygame imageio
-
-# Run with simulation (uses DP-computed optimal policy)
 python3 "TEAM_181 - DP.py" --simulate algorithm
-
-# Or use custom / random action modes
-python3 "TEAM_181 - DP.py" --simulate custom
-python3 "TEAM_181 - DP.py" --simulate random
-
-# Headless (log file only, no GUI window)
-python3 "TEAM_181 - DP.py" --simulate algorithm --headless
 ```
 
-Simulation artifacts are saved under `logs/<timestamp>/`:
-- `simulation.log` — structured step-by-step log
-- `simulation.mp4` — rendered video (when Pygame is enabled)
+Same as above, plus opens a **Pygame window** showing the drone following the optimal policy, and saves a **video** (`simulation.mp4`) + log file under `logs/<timestamp>/`.
+
+Other simulation modes:
+
+```bash
+python3 "TEAM_181 - DP.py" --simulate custom     # predefined action sequence
+python3 "TEAM_181 - DP.py" --simulate random      # random actions
+python3 "TEAM_181 - DP.py" --simulate algorithm --headless  # log only, no GUI
+```
 
 ---
 
