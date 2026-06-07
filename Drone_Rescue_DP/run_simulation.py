@@ -11,6 +11,8 @@ Action modes:
 """
 
 import logging
+import platform
+import time
 from datetime import datetime as dt
 from pathlib import Path
 import sys
@@ -124,6 +126,18 @@ def log_initial_state(logger, observation, info):
         info["battery_level"],
         observation,
     )
+
+
+def log_system_details(logger):
+    """Log system information to the simulation log."""
+    logger.info("System Details:")
+    logger.info("  Platform: %s", platform.platform())
+    logger.info("  OS: %s %s", platform.system(), platform.release())
+    logger.info("  Architecture: %s", platform.architecture()[0])
+    logger.info("  Machine: %s", platform.machine())
+    logger.info("  Processor: %s", platform.processor())
+    logger.info("  Python version: %s", platform.python_version())
+    logger.info("  Python build: %s", " ".join(platform.python_build()))
 
 
 def generate_algorithm_actions(env):
@@ -435,6 +449,9 @@ def run_simulation(action_mode=CUSTOM_ACTION_MODE):
     try:
         env, observation, info = initialize_environment(log_dir)
         log_initial_state(logger, observation, info)
+        log_system_details(logger)
+        logger.info("Waiting 10 seconds before starting the simulation...")
+        time.sleep(10)
         simulation_loop(env, logger, action_mode)
     except Exception:
         logger.exception("Simulation stopped because of an unexpected error.")
